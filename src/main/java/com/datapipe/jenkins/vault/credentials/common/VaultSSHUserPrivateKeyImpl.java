@@ -1,10 +1,14 @@
 package com.datapipe.jenkins.vault.credentials.common;
 
+import com.cloudbees.plugins.credentials.CredentialsProvider;
 import com.cloudbees.plugins.credentials.CredentialsScope;
+import com.cloudbees.plugins.credentials.CredentialsSnapshotTaker;
+import com.datapipe.jenkins.vault.credentials.SecretSnapshot;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.Extension;
 import hudson.model.Item;
 import hudson.model.ItemGroup;
+import hudson.remoting.Channel;
 import hudson.util.FormValidation;
 import hudson.util.ListBoxModel;
 import hudson.util.Secret;
@@ -58,6 +62,14 @@ public class VaultSSHUserPrivateKeyImpl extends AbstractVaultBaseStandardCredent
         this.privateKey = privateKey;
         this.passphrase = passphrase;
         LOGGER.log(Level.WARNING, "constructed ssh key cred");
+    }
+
+    private Object writeReplace() {
+        LOGGER.log(Level.WARNING, "called writeReplace");
+        if (Channel.current() == null) {
+            return this;
+        }
+        return CredentialsProvider.snapshot(this);
     }
 
 
@@ -127,6 +139,24 @@ public class VaultSSHUserPrivateKeyImpl extends AbstractVaultBaseStandardCredent
             return Secret.fromString(getVaultSecretKeyValue(passphraseKey));
         }
         return passphrase.get();
+    }
+
+    public static class CredentialsSnapshotTakerImpl extends CredentialsSnapshotTaker<VaultSSHUserPrivateKeyImpl> {
+
+        @Override
+        public Class<VaultSSHUserPrivateKeyImpl> type() {
+            return VaultSSHUserPrivateKeyImpl.class;
+        }
+
+        @Override
+        public VaultSSHUserPrivateKeyImpl snapshot(
+            VaultSSHUserPrivateKeyImpl credential) {
+                LOGGER.warning("took inner snapshot of ssh key");
+            SecretSnapshot passphrase = new SecretSnapshot(credential.getPassphrase());
+            SecretSnapshot privateKey = new SecretSnapshot(Secret.fromString(credential.getPrivateKeyKey()));
+            SecretSnapshot username = new SecretSnapshot(Secret.fromString(credential.getUsernameKey()));
+            return new VaultSSHUserPrivateKeyImpl(credential.getScope(), credential.getId(), credential.getDescription(), username, privateKey, passphrase);
+        }
     }
 
     @Extension
